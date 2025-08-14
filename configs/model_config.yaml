@@ -1,0 +1,60 @@
+# Model Configuration
+model:
+  name: "two_tower_v1"
+  embedding_dim: 128
+  tower_dims: [256, 128, 64]
+  dropout: 0.2
+  temperature: 0.07
+
+# Data Configuration
+data:
+  dataset: "movielens-25m"  # or "amazon_reviews"
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  negative_sampling_ratio: 4
+  min_user_interactions: 5
+  min_item_interactions: 10
+
+# Training Configuration
+training:
+  batch_size: 512
+  num_epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  scheduler: "cosine"
+  gradient_clip: 1.0
+  early_stopping_patience: 10
+
+# Content Embeddings
+content:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  max_length: 512
+  batch_size: 32
+
+# FAISS Configuration
+faiss:
+  index_type: "IVF"  # or "HNSW", "Flat"
+  dimension: 64
+  nlist: 100
+  metric: "inner_product"
+
+# CTR Ranking
+ctr:
+  model_type: "lightgbm"
+  boosting_type: "gbdt"
+  num_leaves: 31
+  learning_rate: 0.05
+  feature_fraction: 0.9
+  bagging_fraction: 0.8
+  num_boost_round: 100
+
+# Experiment Tracking
+logging:
+  wandb_project: "recommendation-engine"
+  log_interval: 100
+  save_model_every: 5
+
+# Hardware
+device: "cuda"  # or "cpu"
+num_workers: 4

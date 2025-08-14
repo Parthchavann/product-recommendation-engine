@@ -1,0 +1,48 @@
+# Serving Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  max_connections: 1000
+  timeout: 30
+
+# Redis Configuration
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: null
+  max_connections: 10
+  socket_timeout: 5
+  cache_ttl: 3600  # 1 hour
+
+# Model Configuration
+models:
+  two_tower_path: "models/two_tower.pt"
+  faiss_index_path: "models/faiss_index"
+  ctr_model_path: "models/ctr_ranker.txt"
+  embedder_model: "sentence-transformers/all-MiniLM-L6-v2"
+
+# Recommendation Configuration
+recommendations:
+  default_k: 10
+  max_k: 100
+  candidate_multiplier: 3  # Over-fetch for re-ranking
+  min_score_threshold: 0.1
+
+# A/B Testing
+experiments:
+  default_treatment_percentage: 0.5
+  min_sample_size: 1000
+  significance_level: 0.05
+
+# Rate Limiting
+rate_limiting:
+  requests_per_minute: 100
+  burst_size: 20
+
+# Monitoring
+monitoring:
+  metrics_port: 9090
+  log_level: "INFO"
+  enable_performance_tracking: true
