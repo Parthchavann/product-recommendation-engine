@@ -131,13 +131,17 @@ class ABTestManager:
         
         return True
     
-    def get_variant(self, experiment_id: str, user_id: int) -> ExperimentVariant:
+    def get_variant(self, experiment_id: str, user_id: int, 
+                   force_assignment: Optional[bool] = None,
+                   segment_overrides: Optional[Dict[str, str]] = None) -> ExperimentVariant:
         """
-        Deterministically assign user to variant
+        Deterministically assign user to variant with dynamic allocation
         
         Args:
             experiment_id: Experiment identifier
             user_id: User identifier
+            force_assignment: Force specific assignment (bypass normal logic)
+            segment_overrides: Segment-specific allocation overrides
             
         Returns:
             Assigned variant
@@ -160,14 +164,28 @@ class ABTestManager:
         if experiment['end_date'] and now > experiment['end_date']:
             return ExperimentVariant.CONTROL
         
+        # Check for forced assignment
+        if force_assignment is not None:
+            return ExperimentVariant.TREATMENT if force_assignment else ExperimentVariant.CONTROL
+        
+        # Check for segment overrides
+        if segment_overrides:
+            user_segment = self._get_user_segment(user_id)
+            if user_segment in segment_overrides:
+                if segment_overrides[user_segment] == 'treatment':
+                    return ExperimentVariant.TREATMENT
+                else:
+                    return ExperimentVariant.CONTROL
+        
+        # Dynamic allocation based on current sample sizes
+        treatment_percentage = self._get_dynamic_allocation_percentage(experiment_id)
+        
         # Hash user_id for consistent assignment
         hash_input = f"{experiment_id}:{user_id}".encode()
         hash_val = int(hashlib.md5(hash_input).hexdigest(), 16)
         
         # Determine variant based on hash and treatment percentage
-        threshold = experiment['treatment_percentage']
-        
-        if (hash_val % 10000) / 10000 < threshold:
+        if (hash_val % 10000) / 10000 < treatment_percentage:
             return ExperimentVariant.TREATMENT
         return ExperimentVariant.CONTROL
     

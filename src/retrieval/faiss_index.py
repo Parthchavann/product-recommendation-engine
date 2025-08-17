@@ -263,30 +263,53 @@ class FAISSIndex:
         
         logger.info(f"Added {len(new_item_ids)} new items. Total: {self.index.ntotal}")
     
-    def remove_items(self, item_ids: List[int]):
+    def remove_items(self, item_ids: List[int], embedding_store: Optional[Dict[int, np.ndarray]] = None):
         """
         Remove items from index (creates new index without specified items)
         
         Args:
             item_ids: Item IDs to remove
+            embedding_store: Optional dict mapping item_id -> embedding for reconstruction
         """
         
         logger.warning("FAISS doesn't support efficient removal. Rebuilding index...")
         
-        # Get all current embeddings
-        all_embeddings = []
+        if not embedding_store:
+            logger.warning(
+                "No embedding store provided. Cannot efficiently remove items. "
+                "Consider rebuilding index from scratch or providing embedding_store parameter."
+            )
+            raise ValueError(
+                "FAISS doesn't support efficient item removal without original embeddings. "
+                "Please provide embedding_store parameter or rebuild from scratch."
+            )
+        
+        # Get remaining items
         remaining_item_ids = []
+        remaining_embeddings = []
         
-        for faiss_id, item_id in self.id_map.items():
-            if item_id not in item_ids:
-                # This is a simplified approach - in practice, you'd store original embeddings
-                # For now, we'll raise an error suggesting to rebuild from scratch
-                pass
+        for item_id in self.reverse_id_map.keys():
+            if item_id not in item_ids and item_id in embedding_store:
+                remaining_item_ids.append(item_id)
+                remaining_embeddings.append(embedding_store[item_id])
         
-        raise NotImplementedError(
-            "FAISS doesn't support efficient item removal. "
-            "Please rebuild the index from scratch without the removed items."
-        )
+        if not remaining_item_ids:
+            logger.warning("No items remaining after removal")
+            self.index = None
+            self.id_map = {}
+            self.reverse_id_map = {}
+            self.is_trained = False
+            return
+        
+        # Convert to numpy array
+        remaining_embeddings = np.array(remaining_embeddings)
+        
+        logger.info(f"Rebuilding index with {len(remaining_item_ids)} items (removed {len(item_ids)} items)")
+        
+        # Rebuild index
+        self.build_index(remaining_embeddings, remaining_item_ids)
+        
+        logger.info(f"Successfully removed {len(item_ids)} items. New index size: {self.index.ntotal}")
     
     def save(self, path: str):
         """Save index and metadata to disk"""

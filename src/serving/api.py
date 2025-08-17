@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import time
@@ -16,6 +17,7 @@ from .cache import CacheManager
 from .inference import RecommendationInference
 from ..utils.logger import get_logger
 from ..utils.config import Config, get_config_dir
+from ..utils.metrics import get_metrics, APIMetrics
 
 
 logger = get_logger(__name__)
@@ -100,6 +102,10 @@ cache_manager: Optional[CacheManager] = None
 inference_engine: Optional[RecommendationInference] = None
 config: Optional[Config] = None
 
+# Metrics tracking
+metrics = get_metrics()
+api_metrics = APIMetrics(metrics)
+
 # Performance tracking
 request_times = []
 request_count = 0
@@ -112,6 +118,9 @@ async def startup_event():
     global cache_manager, inference_engine, config
     
     logger.info("Starting recommendation API...")
+    
+    # Start system metrics collection
+    metrics.start_system_metrics_collection(interval=30.0)
     
     # Load configuration
     try:
@@ -164,6 +173,9 @@ async def shutdown_event():
     
     logger.info("Shutting down recommendation API...")
     
+    # Stop metrics collection
+    metrics.stop_system_metrics_collection()
+    
     if cache_manager and hasattr(cache_manager, 'redis_cache') and cache_manager.redis_cache:
         cache_manager.redis_cache.close()
     
@@ -203,6 +215,14 @@ async def track_performance(request: Request, call_next):
     # Keep only recent requests (last 1000)
     if len(request_times) > 1000:
         request_times = request_times[-1000:]
+    
+    # Record metrics
+    api_metrics.record_request(
+        endpoint=request.url.path,
+        method=request.method,
+        status_code=response.status_code,
+        duration=process_time
+    )
     
     # Add timing header
     response.headers["X-Process-Time"] = str(process_time)
@@ -431,10 +451,10 @@ async def get_trending_items(
 
 
 @app.get("/metrics", response_model=MetricsResponse)
-async def get_metrics(
+async def get_metrics_json(
     cache: CacheManager = Depends(get_cache_manager)
 ):
-    """Get system metrics and statistics"""
+    """Get system metrics and statistics in JSON format"""
     
     try:
         # Cache stats
@@ -463,6 +483,18 @@ async def get_metrics(
     except Exception as e:
         logger.error(f"Error getting metrics: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving metrics")
+
+
+@app.get("/metrics/prometheus", response_class=PlainTextResponse)
+async def get_prometheus_metrics():
+    """Get metrics in Prometheus text format"""
+    
+    try:
+        return metrics.get_metrics_text()
+        
+    except Exception as e:
+        logger.error(f"Error getting Prometheus metrics: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving Prometheus metrics")
 
 
 @app.get("/model/status")
